@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kp-jyotisha": {
+      "command": "node",
+      "args": ["tools/mcp-server.js"]
+    }
+  }
+}

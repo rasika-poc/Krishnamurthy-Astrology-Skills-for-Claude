@@ -1,0 +1,15 @@
+{
+  "name": "kp-jyotisha",
+  "version": "1.0.0",
+  "description": "KP Krishnamurti Paddhati Jyotisha — Claude skillset with chart calculation tools",
+  "license": "ISC",
+  "scripts": {
+    "install-global": "node install.js",
+    "uninstall":      "node install.js --remove",
+    "chart":          "node tools/chart.js",
+    "mcp":            "node tools/mcp-server.js"
+  },
+  "dependencies": {
+    "@jothisha-apps/jothisha-lib": "^1.0.5-beta.0"
+  }
+}

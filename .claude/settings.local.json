@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node tools/chart.js --help)",
+      "Bash(node tools/mcp-server.js)",
+      "Bash(node *)"
+    ]
+  }
+}
