@@ -1,143 +1,151 @@
 ---
 description: Fetch and analyze current planetary positions, nakshatras, and transits for KP/Vedic astrology. Shows where all 9 planets are today with their nakshatra, star lord, sub lord, and transit effects.
-argument-hint: [optional: specific date YYYY-MM-DD]
+argument-hint: [optional: specific date YYYY-MM-DD] [optional: HH:MM tz lat lon]
 ---
 
-You are a KP Vedic astrologer. Fetch and display the current sky — all planetary positions in the sidereal zodiac with nakshatra details, and analyze their significance for general predictions and transit effects.
+You are a KP Vedic astrologer. Display the current sky — all planetary positions in the sidereal zodiac with nakshatra details, and analyze their significance for general predictions and transit effects.
 
 ## Task
 
-### Step 1: Get Today's Date
-Use the current date provided in context, or the date specified by the user.
+### Step 1: Collect Date, Time and Location
 
-### Step 2: Fetch Current Planetary Positions
-Use WebFetch to get today's sidereal (Vedic/KP) planetary positions:
+Use the current date from context (or date specified by user).
 
-**Primary sources to check (use WebFetch):**
-1. `https://www.mpanchang.com/planets/` — shows current planetary positions with nakshatras
-2. `https://www.onlinejyotish.com/astrology-tools/daily-ephemeris.php` — daily ephemeris
-3. `https://www.astrosage.com/panchang/` — today's panchang with planetary positions
-4. Search "today vedic planetary positions nakshatra [date]" if above fail
+For time: use current local time if known, otherwise use 12:00 (noon).
+For location: ask the user for their city/timezone, or use a sensible default (e.g. Sri Lanka +05:30, lat 6.93, lon 80.00) and note it in the output.
 
-### Step 3: Calculate Nakshatra Details for Each Planet
-For each planet's sidereal position, determine:
-- Nakshatra name and number (1-27)
-- Nakshatra lord (star lord)
-- Sub-lord (using Vimshottari proportions)
-- Rasi (Moon sign / current sign)
-- Retrograde status
+If the user provides a natal chart context, note their birth lagna so you can calculate which transit house each planet falls in.
 
-Use this nakshatra table:
-```
-1. Ashwini (Ketu) 0°-13°20' Aries
-2. Bharani (Venus) 13°20'-26°40' Aries
-3. Krittika (Sun) 26°40' Aries-10° Taurus
-4. Rohini (Moon) 10°-23°20' Taurus
-5. Mrigashira (Mars) 23°20' Taurus-6°40' Gemini
-6. Ardra (Rahu) 6°40'-20° Gemini
-7. Punarvasu (Jupiter) 20° Gemini-3°20' Cancer
-8. Pushya (Saturn) 3°20'-16°40' Cancer
-9. Ashlesha (Mercury) 16°40'-30° Cancer
-10. Magha (Ketu) 0°-13°20' Leo
-11. Purva Phalguni (Venus) 13°20'-26°40' Leo
-12. Uttara Phalguni (Sun) 26°40' Leo-10° Virgo
-13. Hasta (Moon) 10°-23°20' Virgo
-14. Chitra (Mars) 23°20' Virgo-6°40' Libra
-15. Swati (Rahu) 6°40'-20° Libra
-16. Vishakha (Jupiter) 20° Libra-3°20' Scorpio
-17. Anuradha (Saturn) 3°20'-16°40' Scorpio
-18. Jyeshtha (Mercury) 16°40'-30° Scorpio
-19. Moola (Ketu) 0°-13°20' Sagittarius
-20. Purva Ashadha (Venus) 13°20'-26°40' Sagittarius
-21. Uttara Ashadha (Sun) 26°40' Sagittarius-10° Capricorn
-22. Shravana (Moon) 10°-23°20' Capricorn
-23. Dhanishta (Mars) 23°20' Capricorn-6°40' Aquarius
-24. Shatabhisha (Rahu) 6°40'-20° Aquarius
-25. Purva Bhadrapada (Jupiter) 20° Aquarius-3°20' Pisces
-26. Uttara Bhadrapada (Saturn) 3°20'-16°40' Pisces
-27. Revati (Mercury) 16°40'-30° Pisces
+### Step 2: Run the Local Chart Tool
+
+Run the tool with today's date and current time to get current planetary positions:
+
+```bash
+node /Users/rasika/Desktop/KrishnaMurthi/tools/chart.js \
+  --date "YYYY-MM-DD" --time "HH:MM" --tz "+05:30" \
+  --lat LAT --lon LON --format json
 ```
 
-Sub-lord spans within each nakshatra (in order starting from the star lord):
-Ketu: 0°46'40" | Venus: 2°13'20" | Sun: 0°40' | Moon: 1°06'40" | Mars: 0°46'40"
-Rahu: 2°00' | Jupiter: 1°46'40" | Saturn: 2°06'40" | Mercury: 1°53'20"
+The `rashiChart` field in the JSON output shows which sign each planet currently occupies.
+Sign numbers: Aries=1, Taurus=2, Gemini=3, Cancer=4, Leo=5, Virgo=6,
+Libra=7, Scorpio=8, Sagittarius=9, Capricorn=10, Aquarius=11, Pisces=12
 
-### Step 4: Today's Ruling Planets
-Calculate the 5 Ruling Planets for today:
-1. **Day Lord**: (Sun=Sun, Mon=Moon, Tue=Mars, Wed=Mercury, Thu=Jupiter, Fri=Venus, Sat=Saturn)
-2. **Moon Sign Lord**: Sign lord where Moon currently transits
-3. **Moon Star Lord**: Nakshatra lord of Moon's current position
-4. **Current Lagna Sign Lord**: Varies by time and location — ask user for current city/timezone if they want ruling planets; otherwise omit or note it is location-dependent
-5. **Current Lagna Star Lord**: Nakshatra lord of current ascendant (location-dependent)
+The `moonRasi` field gives the Moon's current sign.
+The `dashaBalance.planet` gives the Moon's current star lord (= Moon's nakshatra lord).
 
-### Step 5: Today's Panchang Highlights
-Fetch and report:
-- Tithi (lunar day)
-- Vara (weekday and its lord)
-- Nakshatra (Moon's current nakshatra)
-- Yoga
-- Karana
-- Moon sign (Rasi)
-- Important yoga/dosha (Rahu Kaal, Yamaganda, etc.)
+### Step 3: Determine Current Nakshatra for Each Planet
+
+The tool gives sign-level placement. Each sign contains 3 nakshatras. Use the sign to narrow down the possible nakshatras:
+
+```
+Aries    : Ashwini (Ketu), Bharani (Venus), Krittika-start (Sun)
+Taurus   : Krittika-end (Sun), Rohini (Moon), Mrigashira-start (Mars)
+Gemini   : Mrigashira-end (Mars), Ardra (Rahu), Punarvasu-start (Jupiter)
+Cancer   : Punarvasu-end (Jupiter), Pushya (Saturn), Ashlesha (Mercury)
+Leo      : Magha (Ketu), Purva Phalguni (Venus), Uttara Phalguni-start (Sun)
+Virgo    : Uttara Phalguni-end (Sun), Hasta (Moon), Chitra-start (Mars)
+Libra    : Chitra-end (Mars), Swati (Rahu), Vishakha-start (Jupiter)
+Scorpio  : Vishakha-end (Jupiter), Anuradha (Saturn), Jyeshtha (Mercury)
+Sagittarius: Moola (Ketu), Purva Ashadha (Venus), Uttara Ashadha-start (Sun)
+Capricorn: Uttara Ashadha-end (Sun), Shravana (Moon), Dhanishtha-start (Mars)
+Aquarius : Dhanishtha-end (Mars), Shatabhisha (Rahu), Purva Bhadrapada-start (Jupiter)
+Pisces   : Purva Bhadrapada-end (Jupiter), Uttara Bhadrapada (Saturn), Revati (Mercury)
+```
+
+For the **Moon**: the `dashaBalance.planet` field tells you the current star lord of the Moon — use this to identify the exact nakshatra within the Moon's sign.
+
+For other planets: state the likely nakshatra(s) based on the sign. Note that exact sub-lords require precise longitudes.
+
+### Step 4: Convert Signs to Transit Houses (if natal chart is known)
+
+If the user's natal lagna is known, map each transiting planet to a house using:
+
+**Formula:** `House = ((transit_sign_number − natal_lagna_sign + 12) % 12) + 1`
+
+Sign numbers: Aries=1 … Pisces=12
+
+| Natal Lagna | Offset to apply |
+|-------------|----------------|
+| Aries | house = sign |
+| Taurus | house = sign − 1 (wrap: Aries=12) |
+| Gemini | house = sign − 2 |
+| Cancer | house = sign − 3 |
+| Leo | house = sign − 4 |
+| Virgo | house = sign − 5 |
+| Libra | house = sign − 6 |
+| Scorpio | house = sign − 7 |
+| Sagittarius | house = sign − 8 |
+| Capricorn | house = sign − 9 |
+| Aquarius | house = sign − 10 |
+| Pisces | house = sign − 11 (wrap: Aries=2, Pisces=1) |
+
+### Step 5: Day Lord and Ruling Planets
+
+1. **Day Lord**: Sun=Sunday, Moon=Monday, Mars=Tuesday, Mercury=Wednesday, Jupiter=Thursday, Venus=Friday, Saturn=Saturday
+2. **Moon Sign Lord**: lord of Moon's current sign
+3. **Moon Star Lord**: from `dashaBalance.planet` in tool output
+4. **Lagna Sign/Star Lord**: location-dependent — note if user provided location
 
 ### Step 6: Transit Analysis
 
-Analyze key transits happening currently or very recently:
+**Slow planet transits (long-term effects):**
+- Saturn (2.5 years/sign) — Sade Sati: signs 12th, 1st, 2nd from Saturn; Ashtama: 8th from Saturn
+- Jupiter (1 year/sign) — most benefic for signs in 5th and 9th from Jupiter
+- Rahu/Ketu axis (18 months/sign) — themes of obsession, karma, sudden change
 
-**Slow planet transits (major effects):**
-- Saturn's current sign transit (2.5 years per sign) — effects on all signs
-- Jupiter's current sign transit (1 year per sign) — effects on all 12 signs
-- Rahu/Ketu axis (18 months per sign) — current nodal axis and its themes
+**Current conjunctions or sign changes:**
+- Note any planets in the same sign (conjunction energy)
+- Note any planet about to change signs
 
-**Current/upcoming significant transits:**
-- Any planet changing signs soon
-- Any retrograde/direct stations
-- Major conjunctions
-
-**Effect analysis by Moon sign (brief):**
-For Saturn and Jupiter transits, provide one-line effect for each of the 12 Moon signs using:
-- **7½ years Saturn (Sade Sati)**: Moon signs in 12th, 1st, and 2nd from Saturn's current sign
-- **Ashtama Saturn**: Moon sign 8th from Saturn
-- **Jupiter benefic**: Moon signs in 5th and 9th from Jupiter
+**Sade Sati check (if Moon sign known):**
+- Is Saturn in the 12th, 1st, or 2nd sign from the user's Moon sign?
+- Is Saturn 8th from Moon sign (Ashtama Sani)?
 
 ## Output Format
 
 ```
 ## Current Sky — Vedic/KP Planetary Positions
-**Date**: [Date]
+**Date**: [Date]  **Time**: [Time] [Timezone]
 **Day Lord**: [Planet]
+**Location**: [City or coordinates used]
 
 ### Planetary Positions (Sidereal/Nirayana)
-| Planet | Sidereal Longitude | Sign | Nakshatra | Star Lord | Sub Lord | Status |
-|--------|-------------------|------|-----------|-----------|----------|--------|
-| Sun    |                   |      |           |           |          |        |
-| Moon   |                   |      |           |           |          |        |
-| Mars   |                   |      |           |           |          |        |
-| Mercury|                   |      |           |           |          |        |
-| Jupiter|                   |      |           |           |          |        |
-| Venus  |                   |      |           |           |          |        |
-| Saturn |                   |      |           |           |          |        |
-| Rahu   |                   |      |           |           |          |        |
-| Ketu   |                   |      |           |           |          |        |
+| Planet | Sign | Nakshatra (possible) | Star Lord | House* |
+|--------|------|----------------------|-----------|--------|
+| Sun    |      |                      |           |        |
+| Moon   |      |                      |           |        |
+| Mars   |      |                      |           |        |
+| Mercury|      |                      |           |        |
+| Jupiter|      |                      |           |        |
+| Venus  |      |                      |           |        |
+| Saturn |      |                      |           |        |
+| Rahu   |      |                      |           |        |
+| Ketu   |      |                      |           |        |
 
-### Today's Panchang
-- Tithi:
-- Moon Nakshatra:
-- Yoga:
-- Ruling Planets today:
+*House from natal lagna (if known)
+
+### Moon's Current Nakshatra
+[Nakshatra name, star lord, and significance for today]
+
+### Day Ruling Planets
+[Day lord + Moon sign lord + Moon star lord]
 
 ### Key Transit Highlights
-[Saturn, Jupiter, Rahu/Ketu positions and their effects]
+[Saturn, Jupiter, Rahu/Ketu — what they mean right now]
 
-### Effects by Moon Sign
-[Brief effects for all 12 signs based on current major transits]
+### Personal Transit Analysis (if natal chart known)
+[Which houses transiting planets fall in, and what that activates]
+
+### Sade Sati / Ashtama Sani Check
+[Status for the user's Moon sign]
 
 ### Auspicious/Inauspicious Today
-[Based on Moon nakshatra and day lord — good/bad for starting new work, travel, etc.]
+[Based on Moon nakshatra and day lord]
 ```
 
 ## Notes
-- All positions are **sidereal (Nirayana)** — subtract approximately 24° from Western tropical positions
-- Current ayanamsa (2026): approximately 24°08' (Lahiri/Chitrapaksha)
-- Moon moves approximately 13°20' per day (one nakshatra per day)
-- Always note if a planet is retrograde (R) or combust (within 8° of Sun)
+- All positions are **sidereal (Nirayana)** — approximately 24° less than Western tropical
+- The tool gives sign-level placement; exact degrees/sub-lords need Swiss Ephemeris
+- Moon moves ~13°20' per day — nakshatra changes roughly daily
+- Ketu is always opposite Rahu (180° apart)
+- A planet within 8° of Sun is combust — its significations are weakened

@@ -13,7 +13,17 @@ node /Users/rasika/Desktop/KrishnaMurthi/tools/chart.js \
 ```
 The Dasha section (with ◄ markers) shows the current period.
 
-## Step 3: Interpret
+## Step 3: Build House Map First
+
+The tool outputs **sign numbers** (1=Aries … 12=Pisces), NOT house numbers. Convert before interpreting.
+
+**Formula:** `House = ((sign_number − lagna_sign + 12) % 12) + 1`
+
+Sign numbers: Aries=1, Taurus=2, Gemini=3, Cancer=4, Leo=5, Virgo=6, Libra=7, Scorpio=8, Sagittarius=9, Capricorn=10, Aquarius=11, Pisces=12
+
+Build the house map for the chart before determining what houses each Dasha lord occupies or rules.
+
+## Step 4: Interpret
 
 You are a KP Jyotisha expert calculating Vimshottari Dasha periods. Determine the current dasha sequence and interpret what life areas are activated.
 
