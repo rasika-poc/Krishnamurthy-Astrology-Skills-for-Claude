@@ -165,9 +165,19 @@ function deriveMoonNakshatra(moonSign, birthDashaLord) {
 }
 
 /**
- * Expand the jothisha-lib sign→abbreviation chart map into a structured object.
+ * Convert a zodiac sign number (1=Aries…12=Pisces) to a house number
+ * given the lagna sign. House = ((sign - lagna + 12) % 12) + 1
  */
-function expandChartMap(map) {
+function signToHouse(signNum, lagnaSign) {
+  return ((signNum - lagnaSign + 12) % 12) + 1;
+}
+
+/**
+ * Expand the jothisha-lib sign→abbreviation chart map into a structured object.
+ * If lagnaSign is provided, each entry also includes the house number so callers
+ * never need to do the sign→house conversion manually.
+ */
+function expandChartMap(map, lagnaSign = null) {
   const out = {};
   for (let s = 1; s <= 12; s++) {
     out[s] = {
@@ -176,6 +186,7 @@ function expandChartMap(map) {
       lord:    SIGN_LORDS[s],
       lordSI:  PLANET_NAMES_SI[SIGN_LORDS[s]] || SIGN_LORDS[s],
       planets: (map[s] || []).map(a => PLANET_ABBR[a] || a),
+      ...(lagnaSign ? { house: signToHouse(s, lagnaSign) } : {}),
     };
   }
   return out;
@@ -199,6 +210,8 @@ function buildChartJSON(result, isoTimestamp, lat, lon) {
 
   const derivedNak = moonSign ? deriveMoonNakshatra(moonSign, bal.planet) : null;
 
+  const lagnaSign = lagna.sign;
+
   return {
     input: { isoTimestamp, lat, lon },
     lagna: {
@@ -206,8 +219,8 @@ function buildChartJSON(result, isoTimestamp, lat, lon) {
       lord: SIGN_LORDS[lagna.sign], lordSI: PLANET_NAMES_SI[SIGN_LORDS[lagna.sign]],
     },
     navamsha: { sign: nawanshaka.sign, name: nawanshaka.name, sinhala: nawanshaka.sinhala },
-    rashiChart: expandChartMap(birthChartPlanetPositions),
-    navamshaChart: expandChartMap(nawanshakaChartPlanetPositions),
+    rashiChart: expandChartMap(birthChartPlanetPositions, lagnaSign),
+    navamshaChart: expandChartMap(nawanshakaChartPlanetPositions, lagnaSign),
     dashaBalance: {
       ...bal,
       planetSI: bal.planetSinhala || PLANET_NAMES_SI[bal.planet],
@@ -224,6 +237,21 @@ function buildChartJSON(result, isoTimestamp, lat, lon) {
         end:      new Date(a.endDate).toISOString().slice(0, 10),
       })),
     })),
+    // Flat house map: house number → { sign, planets } — use this for interpretation,
+    // NOT rashiChart which is keyed by zodiac sign number.
+    houseMap: (() => {
+      const hm = {};
+      for (let h = 1; h <= 12; h++) hm[h] = { sign: '', lord: '', planets: [] };
+      for (let s = 1; s <= 12; s++) {
+        const h = signToHouse(s, lagnaSign);
+        hm[h].sign    = SIGN_NAMES[s];
+        hm[h].signSI  = SIGN_NAMES_SI[s];
+        hm[h].lord    = SIGN_LORDS[s];
+        hm[h].lordSI  = PLANET_NAMES_SI[SIGN_LORDS[s]] || SIGN_LORDS[s];
+        hm[h].planets = (birthChartPlanetPositions[s] || []).map(a => PLANET_ABBR[a] || a);
+      }
+      return hm;
+    })(),
     moonRasi: moonSign ? {
       sign: moonSign, name: SIGN_NAMES[moonSign], sinhala: SIGN_NAMES_SI[moonSign],
       lord: SIGN_LORDS[moonSign], lordSI: PLANET_NAMES_SI[SIGN_LORDS[moonSign]],
@@ -248,6 +276,123 @@ function buildChartJSON(result, isoTimestamp, lat, lon) {
   };
 }
 
+// ── Timezone resolution via IANA database ─────────────────────────────────
+
+/**
+ * Common country/region shorthand → IANA zone name.
+ * Accepts ISO-3166 alpha-2 codes, colloquial names, and common abbreviations.
+ */
+const ZONE_ALIASES = {
+  // Sri Lanka
+  lk: 'Asia/Colombo', sl: 'Asia/Colombo', 'sri-lanka': 'Asia/Colombo',
+  colombo: 'Asia/Colombo', srilanka: 'Asia/Colombo',
+  // India
+  in: 'Asia/Kolkata', india: 'Asia/Kolkata', kolkata: 'Asia/Kolkata',
+  // UK
+  uk: 'Europe/London', gb: 'Europe/London', london: 'Europe/London',
+  // USA
+  'us-eastern': 'America/New_York', 'us-est': 'America/New_York',
+  'us-central': 'America/Chicago',  'us-cst': 'America/Chicago',
+  'us-mountain':'America/Denver',   'us-mst': 'America/Denver',
+  'us-pacific': 'America/Los_Angeles','us-pst':'America/Los_Angeles',
+  // Australia
+  'au-sydney': 'Australia/Sydney', sydney: 'Australia/Sydney',
+  'au-melbourne':'Australia/Melbourne',
+  'au-brisbane': 'Australia/Brisbane',
+  'au-perth':    'Australia/Perth',
+  // Other common
+  uae: 'Asia/Dubai', dubai: 'Asia/Dubai',
+  sg:  'Asia/Singapore', singapore: 'Asia/Singapore',
+  my:  'Asia/Kuala_Lumpur', malaysia: 'Asia/Kuala_Lumpur',
+  jp:  'Asia/Tokyo', japan: 'Asia/Tokyo',
+  au:  'Australia/Sydney',
+  nz:  'Pacific/Auckland',
+  ca:  'America/Toronto',
+  de:  'Europe/Berlin', germany: 'Europe/Berlin',
+  fr:  'Europe/Paris',  france: 'Europe/Paris',
+};
+
+/**
+ * Return the UTC offset (e.g. '+06:30') that a given IANA timezone had at a
+ * specific LOCAL date and time.
+ *
+ * Because we only have the local time (not the UTC time), we approximate by
+ * first treating the local time as UTC, reading the zone's offset at that
+ * moment, then correcting — one iteration handles all real-world transitions.
+ *
+ * @param {string} ianaZone  - IANA timezone name, e.g. 'Asia/Colombo'
+ * @param {string} dateStr   - 'YYYY-MM-DD'
+ * @param {string} timeStr   - 'HH:MM' or 'HH:MM:SS'
+ * @returns {string}         - UTC offset string, e.g. '+06:30' or '-05:00'
+ */
+function resolveOffset(ianaZone, dateStr, timeStr) {
+  const zone = ZONE_ALIASES[ianaZone.toLowerCase()] || ianaZone;
+
+  // Parse local date/time components
+  const [y, mo, d]        = dateStr.split('-').map(Number);
+  const [h, mi, s = 0]    = timeStr.split(':').map(Number);
+
+  // Step 1: treat local time as UTC → approximate UTC
+  const approxUtc = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+
+  // Step 2: read zone offset at approxUtc
+  const off1 = _zoneOffsetAt(zone, approxUtc);
+
+  // Step 3: correct → actual UTC = local − offset
+  const offMs = _offsetToMs(off1);
+  const correctedUtc = new Date(approxUtc.getTime() - offMs);
+
+  // Step 4: verify offset hasn't changed across the correction
+  const off2 = _zoneOffsetAt(zone, correctedUtc);
+
+  // In the rare case of a DST gap/overlap we use off2 (the one closest to reality)
+  return off2;
+}
+
+/**
+ * Return the UTC offset string for an IANA zone at a given UTC Date object.
+ */
+function _zoneOffsetAt(ianaZone, utcDate) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ianaZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(utcDate).map(p => [p.type, p.value]));
+
+  // Reconstruct local timestamp as if it were UTC, then diff
+  const localAsUtcMs = Date.UTC(
+    parseInt(parts.year),
+    parseInt(parts.month) - 1,
+    parseInt(parts.day),
+    parseInt(parts.hour),
+    parseInt(parts.minute),
+    parseInt(parts.second),
+  );
+  const offMin = Math.round((localAsUtcMs - utcDate.getTime()) / 60000);
+
+  const sign = offMin >= 0 ? '+' : '-';
+  const hh   = Math.floor(Math.abs(offMin) / 60).toString().padStart(2, '0');
+  const mm   = (Math.abs(offMin) % 60).toString().padStart(2, '0');
+  return `${sign}${hh}:${mm}`;
+}
+
+/** Parse '+05:30' or '-05:00' → milliseconds */
+function _offsetToMs(offset) {
+  const sign = offset[0] === '-' ? -1 : 1;
+  const [hh, mm] = offset.slice(1).split(':').map(Number);
+  return sign * (hh * 60 + mm) * 60000;
+}
+
+/**
+ * Resolve a zone alias to its canonical IANA name.
+ * Returns null if not found.
+ */
+function resolveZoneAlias(alias) {
+  return ZONE_ALIASES[alias.toLowerCase()] || null;
+}
+
 module.exports = {
   NAKSHATRA_NAMES, NAKSHATRA_LORDS, NAKSHATRA_NAMES_SI,
   SIGN_NAMES, SIGN_LORDS, SIGN_NAMES_SI,
@@ -259,6 +404,10 @@ module.exports = {
   getSubLord,
   enrichPosition,
   deriveMoonNakshatra,
+  signToHouse,
   expandChartMap,
   buildChartJSON,
+  resolveOffset,
+  resolveZoneAlias,
+  ZONE_ALIASES,
 };

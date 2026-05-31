@@ -12,17 +12,21 @@ You are a KP Vedic astrologer. Display the current sky — all planetary positio
 Use the current date from context (or date specified by user).
 
 For time: use current local time if known, otherwise use 12:00 (noon).
-For location: ask the user for their city/timezone, or use a sensible default (e.g. Sri Lanka +05:30, lat 6.93, lon 80.00) and note it in the output.
+For location: ask the user for their city/timezone, or use Sri Lanka as default (zone `lk`, lat 6.93, lon 80.00) and note it in the output.
 
 If the user provides a natal chart context, note their birth lagna so you can calculate which transit house each planet falls in.
 
 ### Step 2: Run the Local Chart Tool
 
+**Always use `--zone` — never hardcode `--tz`.**
+Use the user's current location zone (e.g. `lk` for Sri Lanka, `uk` for UK).
+The tool prints the resolved offset — verify it before proceeding.
+
 Run the tool with today's date and current time to get current planetary positions:
 
 ```bash
 node /Users/rasika/Desktop/KrishnaMurthi/tools/chart.js \
-  --date "YYYY-MM-DD" --time "HH:MM" --tz "+05:30" \
+  --date "YYYY-MM-DD" --time "HH:MM" --zone lk \
   --lat LAT --lon LON --format json
 ```
 

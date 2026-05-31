@@ -4,13 +4,31 @@ argument-hint: [birth-date] [birth-time] [timezone] [city or lat,lon]
 ---
 
 ## Step 1: Collect Birth Data
-Ask for: birth date (YYYY-MM-DD), time (HH:MM), timezone (±HH:MM), and birth place (for lat/lon).
+Ask for: birth date (YYYY-MM-DD), time (HH:MM), and birth place (for lat/lon).
 
-## Step 2: Run the Tool
+## Step 2: Resolve Timezone — ALWAYS BEFORE RUNNING THE TOOL
+
+**Wrong timezone = wrong Moon nakshatra = wrong dasha sequence entirely.**
+
+Always use `--zone` — the tool auto-resolves the correct historical offset from the IANA database.
+
+Zone shorthands: `lk` (Sri Lanka) | `in` (India) | `uk` (UK) | `uae` | `sg` | `jp` | `us-eastern` | `us-pacific` | `au-sydney`
+Full IANA names also accepted: `Asia/Colombo`, `Europe/London`, `America/New_York`, etc.
+
+Sri Lanka has 8 historical offset changes — NEVER hardcode +05:30 for Sri Lankan births:
+```
+before 25 May 1996:          +05:30
+25 May – 25 Oct 1996:        +06:30  ← ALST
+26 Oct 1996 – 14 Apr 2006:   +06:00  ← ALST reduced
+after 14 Apr 2006:           +05:30
+```
+
+## Step 3: Run the Tool
 ```bash
 node /Users/rasika/Desktop/KrishnaMurthi/tools/chart.js \
-  --date "YYYY-MM-DD" --time "HH:MM" --tz "+05:30" --lat LAT --lon LON
+  --date "YYYY-MM-DD" --time "HH:MM" --zone lk --lat LAT --lon LON
 ```
+The tool prints the resolved offset (e.g. `[zone] lk → Asia/Colombo → +06:30`). Verify before proceeding.
 The Dasha section (with ◄ markers) shows the current period.
 
 ## Step 3: Build House Map First

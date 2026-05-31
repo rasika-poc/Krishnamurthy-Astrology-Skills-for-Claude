@@ -13,16 +13,21 @@
  * Usage:
  *   node tools/chart.js --iso "1990-05-15T06:30:00+05:30" --lat 13.0827 --lon 80.2707
  *   node tools/chart.js --date "1990-05-15" --time "06:30" --tz "+05:30" --lat 13.0827 --lon 80.2707
- *   node tools/chart.js --date "1990-05-15" --time "06:30" --tz "-05:00" --lat 40.7128 --lon -74.0060
+ *   node tools/chart.js --date "1990-05-15" --time "06:30" --zone lk --lat 6.9271 --lon 79.8612
+ *   node tools/chart.js --date "1996-10-18" --time "08:30" --zone Asia/Colombo --lat 6.9271 --lon 79.8612
  *
  * Options:
  *   --iso     ISO 8601 timestamp with timezone offset
  *   --date    Birth date YYYY-MM-DD
  *   --time    Birth time HH:MM (24h)
- *   --tz      Timezone offset ±HH:MM (e.g. +05:30, -05:00, +00:00)
+ *   --tz      Explicit timezone offset ±HH:MM (e.g. +05:30, -05:00)
+ *   --zone    IANA timezone name OR shorthand — auto-resolves historical offset
+ *             Shorthands: lk, in, uk, us-eastern, us-pacific, sg, uae, au-sydney …
+ *             IANA names: Asia/Colombo, Europe/London, America/New_York …
  *   --lat     Birth latitude in decimal degrees
  *   --lon     Birth longitude in decimal degrees
  *   --format  pretty (default) | json
+ *   --lang    si — show Sinhala names alongside English (pretty mode only)
  *   --help    Show this help
  */
 
@@ -37,6 +42,7 @@ const {
   GANA_SI, NADI_SI, RAJJU_SI,
   PLANET_ABBR,
   deriveMoonNakshatra, buildChartJSON,
+  resolveOffset, resolveZoneAlias, ZONE_ALIASES,
 } = require('./kp-lib');
 
 // ── Formatting helpers ─────────────────────────────────────────────────────
@@ -186,19 +192,75 @@ Options:
   --iso     ISO 8601 timestamp with tz offset    e.g. 1990-05-15T06:30:00+05:30
   --date    Birth date YYYY-MM-DD
   --time    Birth time HH:MM (24h)
-  --tz      Timezone offset ±HH:MM              e.g. +05:30  -05:00  +00:00
+  --tz      Explicit timezone offset ±HH:MM     e.g. +05:30  -05:00  +00:00
+  --zone    IANA name or shorthand (auto-resolves historical offset)
+            Shorthands: lk  in  uk  us-eastern  us-pacific  sg  uae  au-sydney
+            IANA:  Asia/Colombo  Europe/London  America/New_York  ...
   --lat     Latitude  decimal degrees            e.g. 13.0827  (Chennai)
   --lon     Longitude decimal degrees            e.g. 80.2707  (Chennai)
   --format  pretty (default) | json
   --lang    si  — show Sinhala names alongside English (pretty mode only)
 
-Common timezone offsets:
-  India / Sri Lanka  +05:30    UAE / Dubai    +04:00
-  UK (GMT)           +00:00    Singapore      +08:00
-  UK (BST)           +01:00    Japan          +09:00
-  US Eastern         -05:00    Australia/Syd  +10:00
-  US Pacific         -08:00
+Zone shorthands:
+  lk / sl / sri-lanka   Asia/Colombo      in / india          Asia/Kolkata
+  uk / gb / london      Europe/London     uae / dubai         Asia/Dubai
+  sg / singapore        Asia/Singapore    jp / japan          Asia/Tokyo
+  us-eastern / us-est   America/New_York  us-pacific / us-pst America/Los_Angeles
+  au-sydney / sydney    Australia/Sydney
 `);
+}
+
+/**
+ * Infer the most likely IANA timezone from lat/lon using bounding boxes.
+ * Returns { zone, alias, label } or null if no confident match.
+ * Used to give targeted tz-warning when --tz is passed without --zone.
+ */
+function _inferZoneFromCoords(lat, lon) {
+  const regions = [
+    // Sri Lanka
+    { zone: 'Asia/Colombo',        alias: 'lk',          label: 'Sri Lanka',
+      latMin: 5.7,  latMax: 10.0,  lonMin: 79.5, lonMax: 82.0 },
+    // India (overlaps Sri Lanka — Sri Lanka checked first above)
+    { zone: 'Asia/Kolkata',         alias: 'in',          label: 'India',
+      latMin: 6.5,  latMax: 37.5,  lonMin: 68.0, lonMax: 98.0 },
+    // UK / Ireland
+    { zone: 'Europe/London',        alias: 'uk',          label: 'UK',
+      latMin: 49.0, latMax: 61.0,  lonMin: -11.0, lonMax: 2.0 },
+    // US Eastern
+    { zone: 'America/New_York',     alias: 'us-eastern',  label: 'US Eastern',
+      latMin: 24.0, latMax: 50.0,  lonMin: -85.0, lonMax: -66.0 },
+    // US Central
+    { zone: 'America/Chicago',      alias: 'us-central',  label: 'US Central',
+      latMin: 25.0, latMax: 50.0,  lonMin: -104.0, lonMax: -85.0 },
+    // US Mountain
+    { zone: 'America/Denver',       alias: 'us-mountain', label: 'US Mountain',
+      latMin: 25.0, latMax: 50.0,  lonMin: -116.0, lonMax: -104.0 },
+    // US Pacific
+    { zone: 'America/Los_Angeles',  alias: 'us-pacific',  label: 'US Pacific',
+      latMin: 32.0, latMax: 50.0,  lonMin: -125.0, lonMax: -116.0 },
+    // Australia/Sydney
+    { zone: 'Australia/Sydney',     alias: 'au-sydney',   label: 'Australia/Sydney',
+      latMin: -38.0, latMax: -28.0, lonMin: 149.0, lonMax: 154.0 },
+    // Australia/Perth
+    { zone: 'Australia/Perth',      alias: 'au-perth',    label: 'Australia/Perth',
+      latMin: -36.0, latMax: -13.0, lonMin: 113.0, lonMax: 130.0 },
+    // Singapore / Malaysia
+    { zone: 'Asia/Singapore',       alias: 'sg',          label: 'Singapore',
+      latMin: 1.0,  latMax: 2.0,   lonMin: 103.0, lonMax: 105.0 },
+    // UAE
+    { zone: 'Asia/Dubai',           alias: 'uae',         label: 'UAE',
+      latMin: 22.0, latMax: 26.5,  lonMin: 51.0, lonMax: 56.5 },
+    // Japan
+    { zone: 'Asia/Tokyo',           alias: 'jp',          label: 'Japan',
+      latMin: 24.0, latMax: 46.0,  lonMin: 122.0, lonMax: 146.0 },
+  ];
+
+  for (const r of regions) {
+    if (lat >= r.latMin && lat <= r.latMax && lon >= r.lonMin && lon <= r.lonMax) {
+      return { zone: r.zone, alias: r.alias, label: r.label };
+    }
+  }
+  return null;
 }
 
 async function main() {
@@ -220,15 +282,93 @@ async function main() {
   if (args.iso) {
     isoTimestamp = args.iso;
   } else {
-    if (!args.date || !args.time || !args.tz) {
-      console.error('Error: provide --date, --time, and --tz when not using --iso.');
+    if (!args.date || !args.time) {
+      console.error('Error: provide --date and --time (plus --tz or --zone) when not using --iso.');
       process.exit(1);
     }
-    isoTimestamp = `${args.date}T${args.time}:00${args.tz}`;
+
+    let tz = args.tz;
+
+    if (!tz && args.zone) {
+      // Auto-resolve historical offset from IANA zone name or shorthand
+      const ianaZone = resolveZoneAlias(args.zone) || args.zone;
+      try {
+        tz = resolveOffset(ianaZone, args.date, args.time);
+        process.stderr.write(`[zone] ${args.zone} → ${ianaZone} → ${tz} on ${args.date}\n`);
+      } catch (e) {
+        console.error(`Error resolving zone "${args.zone}": ${e.message}`);
+        process.exit(1);
+      }
+    }
+
+    if (!tz) {
+      console.error('Error: provide --tz (e.g. +05:30) or --zone (e.g. lk, Asia/Colombo).');
+      process.exit(1);
+    }
+
+    // ── Timezone validation ────────────────────────────────────────────────
+    // When --tz is given directly (not via --zone), infer the likely timezone
+    // from lat/lon and warn if the provided offset doesn't match the historical
+    // offset for that zone on this date.
+    if (args.tz && !args.zone) {
+      const likely = _inferZoneFromCoords(lat, lon);
+      if (likely) {
+        try {
+          const expected = resolveOffset(likely.zone, args.date, args.time);
+          if (expected !== args.tz) {
+            process.stderr.write(
+              `[tz-warning] --tz ${args.tz} looks wrong for ${likely.label} on ${args.date}.\n` +
+              `             Historical offset was ${expected}. Use --zone ${likely.alias} to auto-resolve.\n`
+            );
+          }
+        } catch { /* zone lookup failed — skip warning */ }
+      }
+    }
+
+    isoTimestamp = `${args.date}T${args.time}:00${tz}`;
+  }
+
+  // ── Validate offset embedded in --iso timestamp ──────────────────────────
+  // Extract the ±HH:MM part from the ISO string and cross-check against the
+  // likely historical timezone for the given coordinates.
+  if (args.iso) {
+    const isoOffsetMatch = args.iso.match(/([+-]\d{2}:\d{2})$/);
+    if (isoOffsetMatch) {
+      const embeddedOffset = isoOffsetMatch[1];
+      const isoDateMatch   = args.iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+      if (isoDateMatch) {
+        const [, isoDate, isoTime] = isoDateMatch;
+        const likely = _inferZoneFromCoords(lat, lon);
+        if (likely) {
+          try {
+            const expected = resolveOffset(likely.zone, isoDate, isoTime);
+            if (expected !== embeddedOffset) {
+              process.stderr.write(
+                `[tz-warning] ISO offset ${embeddedOffset} looks wrong for ${likely.label} on ${isoDate}.\n` +
+                `             Historical offset was ${expected}.\n` +
+                `             Fix: use --date "${isoDate}" --time "${isoTime}" --zone ${likely.alias} instead of --iso.\n`
+              );
+            }
+          } catch { /* zone lookup failed — skip */ }
+        }
+      }
+    }
   }
 
   try {
     const result = generateAstroChartFromISO(isoTimestamp, lat, lon);
+
+    // ── Sanity checks ──────────────────────────────────────────────────────
+    const chart = result.birthChartPlanetPositions;
+    let rahuSign = null, ketuSign = null;
+    for (let s = 1; s <= 12; s++) {
+      if ((chart[s] || []).includes('Ra')) rahuSign = s;
+      if ((chart[s] || []).includes('Ke')) ketuSign = s;
+    }
+    if (rahuSign && ketuSign && Math.abs(rahuSign - ketuSign) !== 6) {
+      process.stderr.write(`WARNING: Rahu (sign ${rahuSign}) and Ketu (sign ${ketuSign}) are not opposite — library may have a bug.\n`);
+    }
+
     if (args.format === 'json') {
       console.log(JSON.stringify(buildChartJSON(result, isoTimestamp, lat, lon), null, 2));
     } else {

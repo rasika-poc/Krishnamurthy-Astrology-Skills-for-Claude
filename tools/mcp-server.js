@@ -17,7 +17,7 @@
 
 const readline = require('readline');
 const { generateAstroChartFromISO } = require('@jothisha-apps/jothisha-lib');
-const { buildChartJSON } = require('./kp-lib');
+const { buildChartJSON, resolveOffset, resolveZoneAlias } = require('./kp-lib');
 
 // ── Tool schema ────────────────────────────────────────────────────────────
 
@@ -33,18 +33,30 @@ const TOOLS = [
       properties: {
         iso: {
           type: 'string',
-          description: 'ISO 8601 birth datetime with timezone offset (e.g. "1990-05-15T06:30:00+05:30").',
+          description: 'ISO 8601 birth datetime with timezone offset (e.g. "1990-05-15T06:30:00+05:30"). Provide this OR date+time+zone.',
+        },
+        date: {
+          type: 'string',
+          description: 'Birth date YYYY-MM-DD. Use with time and zone instead of iso.',
+        },
+        time: {
+          type: 'string',
+          description: 'Birth time HH:MM (24h local time). Use with date and zone.',
+        },
+        zone: {
+          type: 'string',
+          description: 'IANA timezone name or shorthand (e.g. "lk", "Asia/Colombo", "uk", "us-eastern"). Auto-resolves the correct historical UTC offset for the birth date.',
         },
         lat: {
           type: 'number',
-          description: 'Birth place latitude in decimal degrees (e.g. 13.0827 for Chennai).',
+          description: 'Birth place latitude in decimal degrees (e.g. 6.9271 for Colombo).',
         },
         lon: {
           type: 'number',
-          description: 'Birth place longitude in decimal degrees (e.g. 80.2707 for Chennai).',
+          description: 'Birth place longitude in decimal degrees (e.g. 79.8612 for Colombo).',
         },
       },
-      required: ['iso', 'lat', 'lon'],
+      required: ['lat', 'lon'],
     },
   },
 ];
@@ -90,13 +102,28 @@ function dispatch(msg) {
         err(id, -32601, `Unknown tool: ${name}`);
         break;
       }
-      const { iso, lat, lon } = args;
-      if (!iso || lat == null || lon == null) {
-        err(id, -32602, 'Missing required parameters: iso, lat, lon');
+
+      const { lat, lon } = args;
+      if (lat == null || lon == null) {
+        err(id, -32602, 'Missing required parameters: lat, lon');
         break;
       }
-      const chart = generateAstroChartFromISO(iso, parseFloat(lat), parseFloat(lon));
-      const output = buildChartJSON(chart, iso, parseFloat(lat), parseFloat(lon));
+
+      let isoTimestamp = args.iso;
+
+      if (!isoTimestamp) {
+        const { date, time, zone } = args;
+        if (!date || !time || !zone) {
+          err(id, -32602, 'Provide either iso, or date + time + zone');
+          break;
+        }
+        const ianaZone = resolveZoneAlias(zone) || zone;
+        const tz = resolveOffset(ianaZone, date, time);
+        isoTimestamp = `${date}T${time}:00${tz}`;
+      }
+
+      const chart = generateAstroChartFromISO(isoTimestamp, parseFloat(lat), parseFloat(lon));
+      const output = buildChartJSON(chart, isoTimestamp, parseFloat(lat), parseFloat(lon));
       ok(id, { content: [{ type: 'text', text: JSON.stringify(output, null, 2) }] });
       break;
     }
