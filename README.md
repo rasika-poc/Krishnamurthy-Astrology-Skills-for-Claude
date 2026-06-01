@@ -81,6 +81,26 @@ Shows where all 9 planets are right now in the sidereal zodiac:
 
 ---
 
+### `/kp-knowledge` — KP Jyotisha Knowledge Reference
+
+A comprehensive knowledge base for KP theory and interpretation:
+- All 9 planet significations — body parts, career fields, karaka roles, diseases, prediction notes
+- All 12 house meanings — topics, body parts, natural significators, event house groups
+- All 12 sign characteristics — element, quality, ruler, body part, nature
+- All 27 nakshatra details — deity, symbol, gana, body part, key prediction characteristics
+- Sub-lord theory — the 249 sub-divisions and how to apply yes/no analysis
+- Significator methodology — 4-level hierarchy (A/B/C/D) with step-by-step table building
+- Ruling planets technique — 5 RPs, how to calculate, how to use for verification and timing
+- Planet relationships — natural friends/enemies, compound relationships, KP stance
+- Retrograde rules — natal vs horary treatment, RP discard rule
+- Combustion rules — distances, effects, transit impact
+- Full prediction framework — 3 conditions that must align for an event to manifest
+- Quick-reference tables — exaltation/debilitation, karakas, benefics/malefics
+
+**Usage:** `/kp-knowledge` for full reference, or `/kp-knowledge planets` / `/kp-knowledge houses` / `/kp-knowledge nakshatras` for a specific section
+
+---
+
 ### `/current-dasha` — Vimshottari Dasha Timeline
 
 Calculates and interprets planetary periods from birth:

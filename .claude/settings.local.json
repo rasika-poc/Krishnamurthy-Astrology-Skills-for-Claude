@@ -3,7 +3,14 @@
     "allow": [
       "Bash(node tools/chart.js --help)",
       "Bash(node tools/mcp-server.js)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Skill(deep-research)",
+      "WebSearch",
+      "WebFetch(domain:kpastrology.astrosage.com)",
+      "WebFetch(domain:vedicmarga.com)",
+      "WebFetch(domain:www.ajmerastro.com)",
+      "WebFetch(domain:roxyapi.com)",
+      "WebFetch(domain:kpastrologypro.com)"
     ]
   }
 }
